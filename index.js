@@ -109,7 +109,6 @@ const client = new Client({
 
 // ===== NEW SLASH COMMANDS =====
 const commands = [
-  // ----- STATS -----
   {
     name: "stats",
     description: "See a user's nut stats",
@@ -123,10 +122,7 @@ const commands = [
     ],
   },
 
-  {
-    name: "mystats",
-    description: "See your own nut stats",
-  },
+  { name: "mystats", description: "See your own nut stats" },
 
   {
     name: "compare",
@@ -147,35 +143,11 @@ const commands = [
     ],
   },
 
-  // ----- NEW /nut -----
-  {
-    name: "nut",
-    description: "See how many times you have nutted",
-  },
-
-  // ----- NEW /count -----
-  {
-    name: "count",
-    description: "See the current global nut count",
-  },
-
-  // ----- NEW /leaderboard -----
-  {
-    name: "leaderboard",
-    description: "See the lifetime nut leaderboard",
-  },
-
-  // ----- NEW /weekly -----
-  {
-    name: "weekly",
-    description: "See the weekly nut leaderboard",
-  },
-
-  // ----- NEW /help -----
-  {
-    name: "help",
-    description: "Show all NutBot commands",
-  },
+  { name: "nut", description: "See how many times you have nutted" },
+  { name: "count", description: "See the current global nut count" },
+  { name: "leaderboard", description: "See the lifetime nut leaderboard" },
+  { name: "weekly", description: "See the weekly nut leaderboard" },
+  { name: "help", description: "Show all NutBot commands" },
 ];
 
 async function registerCommands() {
@@ -204,13 +176,14 @@ cron.schedule("0 0 * * 0", async () => {
   if (weeklyStats.length === 0) return;
 
   const winner = weeklyStats[0];
-  const userId = winner.userId;
-  const weeklyNuts = winner.weeklyNuts || 0;
+
+  const userObj = await client.users.fetch(winner.userId).catch(() => null);
+  const username = userObj ? userObj.username : `Unknown (${winner.userId})`;
 
   const embed = new EmbedBuilder()
     .setTitle("🏅 **NUTTER OF THE WEEK** 🏅")
     .setDescription(
-      `Congratulations <@${userId}>!\nYou nutted **${weeklyNuts} times** this week! 🥜`
+      `Congratulations **${username}**!\nYou nutted **${winner.weeklyNuts} times** this week! 🥜`
     )
     .setColor("Gold")
     .setTimestamp();
@@ -223,7 +196,6 @@ cron.schedule("0 0 * * 0", async () => {
 // ===== COUNTING CHANNEL HANDLER =====
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
-
   if (msg.channel.id !== NUT_CHANNEL_ID) return;
 
   if (/^\d+$/.test(msg.content)) {
@@ -264,12 +236,11 @@ client.on("interactionCreate", async (interaction) => {
 
   // ----- /nut -----
   if (interaction.commandName === "nut") {
-    const user = interaction.user;
-    const stats = await getUser(user.id);
+    const stats = await getUser(interaction.user.id);
     const nuts = stats?.nuts || 0;
 
     return interaction.reply(
-      `<@${user.id}> has nutted **${nuts} times!** 🥜`
+      `<@${interaction.user.id}> has nutted **${nuts} times!** 🥜`
     );
   }
 
@@ -281,42 +252,50 @@ client.on("interactionCreate", async (interaction) => {
     );
   }
 
-  // ----- /leaderboard -----
+  // ----- /leaderboard (TOP 5) -----
   if (interaction.commandName === "leaderboard") {
     const results = await getLeaderboard();
     if (results.length === 0)
       return interaction.reply("Nobody has nutted yet!");
 
     const embed = new EmbedBuilder()
-      .setTitle("🏆 NUT LEADERBOARD 🏆")
+      .setTitle("🏆 NUT LEADERBOARD 🏆 (Top 5)")
       .setColor("Gold");
 
-    results.forEach((u, i) => {
+    for (let i = 0; i < Math.min(5, results.length); i++) {
+      const u = results[i];
+      const userObj = await client.users.fetch(u.userId).catch(() => null);
+      const username = userObj ? userObj.username : `Unknown (${u.userId})`;
+
       embed.addFields({
-        name: `#${i + 1} — <@${u.userId}>`,
+        name: `#${i + 1} — ${username}`,
         value: `**${u.nuts} lifetime nuts**`,
       });
-    });
+    }
 
     return interaction.reply({ embeds: [embed] });
   }
 
-  // ----- /weekly -----
+  // ----- /weekly (TOP 5) -----
   if (interaction.commandName === "weekly") {
     const results = await getWeeklyLeaderboard();
     if (results.length === 0)
       return interaction.reply("Nobody has nutted this week!");
 
     const embed = new EmbedBuilder()
-      .setTitle("🏅 WEEKLY NUTTER LEADERBOARD 🏅")
+      .setTitle("🏅 WEEKLY NUTTER LEADERBOARD 🏅 (Top 5)")
       .setColor("Purple");
 
-    results.forEach((u, i) => {
+    for (let i = 0; i < Math.min(5, results.length); i++) {
+      const u = results[i];
+      const userObj = await client.users.fetch(u.userId).catch(() => null);
+      const username = userObj ? userObj.username : `Unknown (${u.userId})`;
+
       embed.addFields({
-        name: `#${i + 1} — <@${u.userId}>`,
+        name: `#${i + 1} — ${username}`,
         value: `**${u.weeklyNuts || 0} weekly nuts**`,
       });
-    });
+    }
 
     return interaction.reply({ embeds: [embed] });
   }
@@ -329,8 +308,8 @@ client.on("interactionCreate", async (interaction) => {
       .addFields(
         { name: "/nut", value: "See how many times YOU have nutted." },
         { name: "/count", value: "See the global nut count." },
-        { name: "/leaderboard", value: "Lifetime nut leaderboard." },
-        { name: "/weekly", value: "Weekly nut leaderboard." },
+        { name: "/leaderboard", value: "Lifetime nut leaderboard (Top 5)." },
+        { name: "/weekly", value: "Weekly nut leaderboard (Top 5)." },
         { name: "/stats @user", value: "View someone's stats." },
         { name: "/mystats", value: "View your own stats." },
         { name: "/compare @user1 @user2", value: "Compare two users." }
@@ -365,8 +344,7 @@ client.on("interactionCreate", async (interaction) => {
 
   // ----- /mystats -----
   if (interaction.commandName === "mystats") {
-    const user = interaction.user;
-    const stats = await getUser(user.id);
+    const stats = await getUser(interaction.user.id);
 
     const nuts = stats?.nuts || 0;
     const weekly = stats?.weeklyNuts || 0;
@@ -401,9 +379,9 @@ client.on("interactionCreate", async (interaction) => {
 
     const winner =
       nuts1 > nuts2
-        ? `<@${user1.id}> is winning! 🔥`
+        ? `${user1.username} is winning! 🔥`
         : nuts2 > nuts1
-        ? `<@${user2.id}> is winning! 🔥`
+        ? `${user2.username} is winning! 🔥`
         : "It's a tie! 😳";
 
     const embed = new EmbedBuilder()
